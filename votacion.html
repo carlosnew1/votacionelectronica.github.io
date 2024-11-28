@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Votación Electrónica</title>
+    <style>
+        body {
+            background-color: #003366;
+            color: white;
+            font-family: Georgia, serif;
+            text-align: center;
+            padding: 20px;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+        }
+
+        .candidate {
+            margin: 15px 0;
+            padding: 10px;
+            border: 2px solid white;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: transform 0.2s, background-color 0.2s;
+            display: inline-block;
+            width: 200px;
+            text-align: center;
+        }
+
+        .candidate:hover {
+            transform: scale(1.05);
+            background-color: #00509E;
+        }
+
+        .candidate img {
+            width: 100%;
+            border-radius: 10px;
+            margin-bottom: 10px;
+        }
+
+        .candidate-name {
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .vote-count {
+            font-size: 16px;
+            margin-top: 10px;
+            font-weight: normal;
+        }
+
+        #counter {
+            margin: 20px 0;
+            font-size: 18px;
+        }
+
+        #voteForm {
+            margin: 20px auto;
+            display: none;
+            text-align: left;
+            max-width: 300px;
+            background-color: #00509E;
+            padding: 15px;
+            border-radius: 10px;
+        }
+
+        #voteForm label {
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        #voteForm input {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: none;
+            border-radius: 5px;
+        }
+
+        #voteForm button {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            background-color: #003366;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        #voteForm button:hover {
+            background-color: #001F4C;
+        }
+
+        #qrCodeContainer {
+            margin-top: 20px;
+        }
+
+        /* Modal estilos */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+
+        .modal-content {
+            background-color: white;
+            color: black;
+            margin: 15% auto;
+            padding: 20px;
+            border-radius: 10px;
+            width: 80%;
+            max-width: 400px;
+            text-align: center;
+        }
+
+        .modal-content button {
+            background-color: #003366;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        .modal-content button:hover {
+            background-color: #001F4C;
+        }
+    </style>
+</head>
+<body>
+    <h1>Sistema de Votación Electrónica</h1>
+    <div id="counter"></div>
+    <div id="candidates">
+        <!-- Candidato 1 -->
+        <div class="candidate" onclick="selectCandidate('Candidato 1')">
+            <img src="https://via.placeholder.com/150" alt="Candidato 1">
+            <div class="candidate-name">Candidato 1</div>
+            <div id="voteCount1" class="vote-count">Votos: 0</div>
+        </div>
+        <!-- Candidato 2 -->
+        <div class="candidate" onclick="selectCandidate('Candidato 2')">
+            <img src="https://via.placeholder.com/150" alt="Candidato 2">
+            <div class="candidate-name">Candidato 2</div>
+            <div id="voteCount2" class="vote-count">Votos: 0</div>
+        </div>
+        <!-- Candidato 3 -->
+        <div class="candidate" onclick="selectCandidate('Candidato 3')">
+            <img src="https://via.placeholder.com/150" alt="Candidato 3">
+            <div class="candidate-name">Candidato 3</div>
+            <div id="voteCount3" class="vote-count">Votos: 0</div>
+        </div>
+    </div>
+
+    <div id="voteForm">
+        <label for="cedula">Ingrese su número de cédula:</label>
+        <input type="text" id="cedula" placeholder="Número de cédula">
+        <button onclick="submitVote()">Votar</button>
+    </div>
+
+    <div id="result"></div>
+    <div id="qrCodeContainer"></div>
+
+    <!-- Modal -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <p id="modalMessage"></p>
+            <button onclick="closeModal()">Cerrar</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script>
+        // Configuración de horas de inicio y finalización
+        const startTime = new Date();
+        startTime.setHours(9, 0, 0);
+
+        const endTime = new Date();
+        endTime.setHours(17, 0, 0);
+
+        let votes = { 'Candidato 1': 0, 'Candidato 2': 0, 'Candidato 3': 0 };
+        let votingStarted = false;
+        let votingEnded = false;
+        let selectedCandidate = null;
+
+        const votedCedulas = new Set(); // Lista de cédulas que ya votaron
+
+        function showModal(message) {
+            document.getElementById('modalMessage').innerText = message;
+            document.getElementById('modal').style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('modal').style.display = 'none';
+        }
+
+        // Actualizar contador
+        function updateCounter() {
+            const now = new Date();
+
+            if (now < startTime) {
+                const timeLeftToStart = startTime - now;
+                const hours = Math.floor(timeLeftToStart / (1000 * 60 * 60));
+                const minutes = Math.floor((timeLeftToStart % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((timeLeftToStart % (1000 * 60)) / 1000);
+
+                document.getElementById('counter').innerText = 
+                    `La votación comienza en: ${hours}h ${minutes}m ${seconds}s`;
+                return;
+            }
+
+            if (now >= startTime && now < endTime) {
+                votingStarted = true;
+                const timeLeft = endTime - now;
+                const hours = Math.floor(timeLeft / (1000 * 60 * 60));
+                const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
+
+                document.getElementById('counter').innerText = 
+                    `Tiempo restante para votar: ${hours}h ${minutes}m ${seconds}s`;
+                return;
+            }
+
+            if (now >= endTime) {
+                votingEnded = true;
+                document.getElementById('counter').innerText = "¡La votación ha finalizado!";
+                showWinner();
+            }
+        }
+
+        setInterval(updateCounter, 1000);
+        updateCounter();
+
+        function selectCandidate(candidate) {
+            if (!votingStarted) {
+                showModal("La votación aún no ha comenzado.");
+                return;
+            }
+
+            if (votingEnded) {
+                showModal("La votación ya terminó.");
+                return;
+            }
+
+            selectedCandidate = candidate;
+            document.getElementById('voteForm').style.display = 'block';
+        }
+
+        function submitVote() {
+            const cedula = document.getElementById('cedula').value.trim();
+            if (!cedula) {
+                showModal("Por favor, ingrese su número de cédula.");
+                return;
+            }
+
+            if (votedCedulas.has(cedula)) {
+                showModal("Esta cédula ya ha votado. No se permite votar más de una vez.");
+                return;
+            }
+
+            votedCedulas.add(cedula);
+            votes[selectedCandidate]++;
+            updateVoteCount();
+            showModal(`¡Gracias por votar por ${selectedCandidate}!`);
+
+            const qrContainer = document.getElementById('qrCodeContainer');
+            qrContainer.innerHTML = '';
+            new QRCode(qrContainer, {
+                text: `Voto confirmado para: ${selectedCandidate}\nCédula: ${cedula}`,
+                width: 128,
+                height: 128
+            });
+
+            document.getElementById('voteForm').reset();
+            document.getElementById('voteForm').style.display = 'none';
+        }
+
+        function updateVoteCount() {
+            document.getElementById('voteCount1').innerText = `Votos: ${votes['Candidato 1']}`;
+            document.getElementById('voteCount2').innerText = `Votos: ${votes['Candidato 2']}`;
+            document.getElementById('voteCount3').innerText = `Votos: ${votes['Candidato 3']}`;
+        }
+
+        function showWinner() {
+            let winner = Object.keys(votes)[0];
+            let maxVotes = votes[winner];
+
+            for (let candidate in votes) {
+                if (votes[candidate] > maxVotes) {
+                    winner = candidate;
+                    maxVotes = votes[candidate];
+                }
+            }
+
+            document.getElementById('result').innerHTML = `<h2>El ganador es: ${winner} con ${maxVotes} votos</h2>`;
+        }
+    </script>
+</body>
+</html>
